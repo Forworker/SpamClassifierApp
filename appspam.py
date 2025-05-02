@@ -3,23 +3,26 @@ import tempfile
 import streamlit as st
 import pickle
 import re
+import whisper
 import nltk
-import openai
-from openai import OpenAIError
+
 
 # Add local nltk_data path
 nltk.data.path.append(os.path.join(os.path.dirname(__file__), "nltk_data"))
+
+
 from nltk.corpus import stopwords
 
-# Load secrets (OpenAI API Key)
-openai.api_key = st.secrets["OPENAI_API_KEY"]
-
 # ==================== Load Trained Components ====================
+#Download the previously saved model and TF-IDF (in pickle format)
 with open("model_nb.pkl", "rb") as f:
     model = pickle.load(f)
 
 with open("vectorizer.pkl", "rb") as f:
     vectorizer = pickle.load(f)
+
+#Download the Whisper template
+asr_model = whisper.load_model("base")
 
 # ==================== Text Preprocessing ====================
 def preprocess_text(text):
@@ -28,27 +31,13 @@ def preprocess_text(text):
     stop_words = set(stopwords.words("english"))
     return ' '.join([word for word in text.split() if word not in stop_words])
 
-# ==================== Whisper API Transcription ====================
-def transcribe_audio(filename):
-    with open(filename, "rb") as audio_file:
-        try:
-            transcript = openai.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
-            return transcript.text
-        except openai.RateLimitError:
-            return "❌ Rate limit exceeded. Please try again later or use a new API key."
-        except OpenAIError as e:
-            return f"❌ Whisper API Error: {str(e)}"
-
 # ==================== App UI ====================
 st.set_page_config(page_title="Spam Classifier", layout="centered")
-st.title("Spam Classifier from Text & Audio")
-st.markdown("Enter text or upload an audio clip to determine if the message is Spam.")
+st.title(" Spam Classifier from Text & Audio")
+st.markdown("Enter text or record an audio clip to determine whether a message is Spam or not.")
 
 # ========== Text Input ==========
-st.subheader("Manual text entry")
+st.subheader("Manual text entry ")
 text_input = st.text_area("Write your message here:")
 
 if text_input:
@@ -58,22 +47,21 @@ if text_input:
     st.success("🟠 SPAM" if pred else "🟢 NOT SPAM")
 
 # ========== Audio Upload ==========
-st.subheader("Or upload an audio clip 🎙️")
-audio_file = st.file_uploader("Upload an audio file [mp3/wav/m4a]", type=["mp3", "wav", "m4a"])
+st.subheader("Or upload an audio clip 🎙️ ")
+audio_file = st.file_uploader("Upload an audio file in the format [mp3/wav/m4a]", type=["mp3", "wav", "m4a"])
 
 if audio_file is not None:
+    
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
         tmp.write(audio_file.read())
         temp_filename = tmp.name
 
-    st.info("⏳ Converting audio to text using Whisper API...")
-    transcribed_text = transcribe_audio(temp_filename)
+    st.info("⏳ Converting audio to text...")
+    result = asr_model.transcribe(temp_filename)
+    transcribed_text = result["text"]
+    st.text_area("🗣️ Text extracted from the audio:", transcribed_text)
 
-    if transcribed_text.startswith("❌"):
-        st.error(transcribed_text)
-    else:
-        st.text_area("🗣️ Text extracted from the audio:", transcribed_text)
-        cleaned_audio_text = preprocess_text(transcribed_text)
-        vect_audio = vectorizer.transform([cleaned_audio_text])
-        pred_audio = model.predict(vect_audio)[0]
-        st.success("🟠 SPAM" if pred_audio else "🟢 NOT SPAM")
+    cleaned_audio_text = preprocess_text(transcribed_text)
+    vect_audio = vectorizer.transform([cleaned_audio_text])
+    pred_audio = model.predict(vect_audio)[0]
+    st.success("🟠 SPAM" if pred_audio else "🟢 NOT SPAM")
