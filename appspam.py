@@ -3,8 +3,17 @@ import tempfile
 import streamlit as st
 import pickle
 import re
-from nltk.corpus import stopwords
 import whisper
+import nltk
+
+
+# Add local nltk_data path
+nltk.data.path.append(os.path.join(os.path.dirname(__file__), "nltk_data"))
+
+
+from nltk.corpus import stopwords
+
+
 
 # ==================== Load Trained Components ====================
 #Download the previously saved model and TF-IDF (in pickle format)
@@ -58,3 +67,4 @@ if audio_file is not None:
     vect_audio = vectorizer.transform([cleaned_audio_text])
     pred_audio = model.predict(vect_audio)[0]
     st.success("🟠 SPAM" if pred_audio else "🟢 NOT SPAM")
+
