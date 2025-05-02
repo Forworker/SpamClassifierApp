@@ -5,25 +5,22 @@ import pickle
 import re
 import whisper
 import nltk
+import torchaudio
 
 
 # Add local nltk_data path
 nltk.data.path.append(os.path.join(os.path.dirname(__file__), "nltk_data"))
 
-
 from nltk.corpus import stopwords
 
-
-
 # ==================== Load Trained Components ====================
-#Download the previously saved model and TF-IDF (in pickle format)
 with open("model_nb.pkl", "rb") as f:
     model = pickle.load(f)
 
 with open("vectorizer.pkl", "rb") as f:
     vectorizer = pickle.load(f)
 
-#Download the Whisper template
+# Load Whisper model
 asr_model = whisper.load_model("base")
 
 # ==================== Text Preprocessing ====================
@@ -32,6 +29,15 @@ def preprocess_text(text):
     text = re.sub(r"[^\w\s]", "", text)
     stop_words = set(stopwords.words("english"))
     return ' '.join([word for word in text.split() if word not in stop_words])
+
+# ==================== Safe Audio Transcription ====================
+def transcribe_audio(filename):
+    audio, sr = torchaudio.load(filename)
+    audio = whisper.pad_or_trim(audio.flatten())
+    mel = whisper.log_mel_spectrogram(audio).to(asr_model.device)
+    options = whisper.DecodingOptions()
+    result = whisper.decode(asr_model, mel, options)
+    return result.text
 
 # ==================== App UI ====================
 st.set_page_config(page_title="Spam Classifier", layout="centered")
@@ -53,14 +59,12 @@ st.subheader("Or upload an audio clip 🎙️ ")
 audio_file = st.file_uploader("Upload an audio file in the format [mp3/wav/m4a]", type=["mp3", "wav", "m4a"])
 
 if audio_file is not None:
-    
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
         tmp.write(audio_file.read())
         temp_filename = tmp.name
 
     st.info("⏳ Converting audio to text...")
-    result = asr_model.transcribe(temp_filename)
-    transcribed_text = result["text"]
+    transcribed_text = transcribe_audio(temp_filename)
     st.text_area("🗣️ Text extracted from the audio:", transcribed_text)
 
     cleaned_audio_text = preprocess_text(transcribed_text)
@@ -68,3 +72,7 @@ if audio_file is not None:
     pred_audio = model.predict(vect_audio)[0]
     st.success("🟠 SPAM" if pred_audio else "🟢 NOT SPAM")
 
+
+
+
+    
