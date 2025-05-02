@@ -5,8 +5,6 @@ import pickle
 import re
 import whisper
 import nltk
-import torchaudio
-
 
 # Add local nltk_data path
 nltk.data.path.append(os.path.join(os.path.dirname(__file__), "nltk_data"))
@@ -30,19 +28,15 @@ def preprocess_text(text):
     stop_words = set(stopwords.words("english"))
     return ' '.join([word for word in text.split() if word not in stop_words])
 
-# ==================== Safe Audio Transcription ====================
+# ==================== Simple Whisper Transcription ====================
 def transcribe_audio(filename):
-    audio, sr = torchaudio.load(filename)
-    audio = whisper.pad_or_trim(audio.flatten())
-    mel = whisper.log_mel_spectrogram(audio).to(asr_model.device)
-    options = whisper.DecodingOptions()
-    result = whisper.decode(asr_model, mel, options)
-    return result.text
+    result = asr_model.transcribe(filename)
+    return result["text"]
 
 # ==================== App UI ====================
 st.set_page_config(page_title="Spam Classifier", layout="centered")
-st.title(" Spam Classifier from Text & Audio")
-st.markdown("Enter text or record an audio clip to determine whether a message is Spam or not.")
+st.title("Spam Classifier from Text & Audio")
+st.markdown("Enter text or upload an audio clip to determine if the message is Spam.")
 
 # ========== Text Input ==========
 st.subheader("Manual text entry ")
@@ -56,7 +50,7 @@ if text_input:
 
 # ========== Audio Upload ==========
 st.subheader("Or upload an audio clip 🎙️ ")
-audio_file = st.file_uploader("Upload an audio file in the format [mp3/wav/m4a]", type=["mp3", "wav", "m4a"])
+audio_file = st.file_uploader("Upload an audio file [mp3/wav/m4a]", type=["mp3", "wav", "m4a"])
 
 if audio_file is not None:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
