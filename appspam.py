@@ -4,14 +4,15 @@ import streamlit as st
 import pickle
 import re
 import nltk
-from openai import OpenAI
+import openai
+from openai import OpenAIError
 
 # Add local nltk_data path
 nltk.data.path.append(os.path.join(os.path.dirname(__file__), "nltk_data"))
 from nltk.corpus import stopwords
 
 # Load secrets (OpenAI API Key)
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # ==================== Load Trained Components ====================
 with open("model_nb.pkl", "rb") as f:
@@ -30,11 +31,16 @@ def preprocess_text(text):
 # ==================== Whisper API Transcription ====================
 def transcribe_audio(filename):
     with open(filename, "rb") as audio_file:
-        transcript = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
-    return transcript.text
+        try:
+            transcript = openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+            return transcript.text
+        except openai.RateLimitError:
+            return "❌ Rate limit exceeded. Please try again later or use a new API key."
+        except OpenAIError as e:
+            return f"❌ Whisper API Error: {str(e)}"
 
 # ==================== App UI ====================
 st.set_page_config(page_title="Spam Classifier", layout="centered")
@@ -62,14 +68,12 @@ if audio_file is not None:
 
     st.info("⏳ Converting audio to text using Whisper API...")
     transcribed_text = transcribe_audio(temp_filename)
-    st.text_area("🗣️ Text extracted from the audio:", transcribed_text)
 
-    cleaned_audio_text = preprocess_text(transcribed_text)
-    vect_audio = vectorizer.transform([cleaned_audio_text])
-    pred_audio = model.predict(vect_audio)[0]
-    st.success("🟠 SPAM" if pred_audio else "🟢 NOT SPAM")
-
-
-
-
-    
+    if transcribed_text.startswith("❌"):
+        st.error(transcribed_text)
+    else:
+        st.text_area("🗣️ Text extracted from the audio:", transcribed_text)
+        cleaned_audio_text = preprocess_text(transcribed_text)
+        vect_audio = vectorizer.transform([cleaned_audio_text])
+        pred_audio = model.predict(vect_audio)[0]
+        st.success("🟠 SPAM" if pred_audio else "🟢 NOT SPAM")
