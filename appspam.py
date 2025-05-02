@@ -4,14 +4,14 @@ import streamlit as st
 import pickle
 import re
 import nltk
-import openai
+from openai import OpenAI
 
 # Add local nltk_data path
 nltk.data.path.append(os.path.join(os.path.dirname(__file__), "nltk_data"))
 from nltk.corpus import stopwords
 
 # Load secrets (OpenAI API Key)
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ==================== Load Trained Components ====================
 with open("model_nb.pkl", "rb") as f:
@@ -30,8 +30,11 @@ def preprocess_text(text):
 # ==================== Whisper API Transcription ====================
 def transcribe_audio(filename):
     with open(filename, "rb") as audio_file:
-        transcript = openai.Audio.transcribe("whisper-1", audio_file)
-    return transcript["text"]
+        transcript = client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file
+        )
+    return transcript.text
 
 # ==================== App UI ====================
 st.set_page_config(page_title="Spam Classifier", layout="centered")
